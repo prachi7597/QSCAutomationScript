@@ -1,0 +1,78 @@
+# Configure the AWS Provider
+provider "aws" {
+  region = "ap-south-1"
+}
+
+variable "Key_Pair_Name" {
+  type    = string
+  default = "QSC-POC-Key"
+}
+
+
+variable "public_key" {
+  type    = string
+  default = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDsGvSCLuHuX/dOmuG0Nlh1NKhFQ544q11woFJNftBDRWc3Mwc5PBF51r/p7tnCsMBBxIhG7E7GdVBsnZnv8Ija7fcuR1nf7CBmqnsAEW9UcrT0+6OGiDO1cnknMd3ZOoQ7GCqzxs8tn6LjBJgXKEl3hyKIEXsR38jM73JnFL49XDcvoWftTXn85XftAQOCParS8fhs9Q2zd1N9Qa/PJlsg5f7JonplcWtxwbtjZNcyRNS9VOJkGGElz3RFSOYmAOO1foBW+kSjA95Xc2Vf+vnPYaf6G/f09t3aK9OqHQpmsJ66adWhsAfTYVVcIvjhZkBqXcNVLboUdhCXBY7KT1hj+PN2d9fIa8gppYUk59X3oWXODUuokqvYhJEe6swpL6SU72qpWuRbySpxH7TjRhcpvlnfM3zjfmmwIKtoS+CZIbUy7uS3K35+AE96AZUzmyJdjDoIK3nmfRIeiSGy5S+QRVm0k1IRAXyBOhGfMwJoor3aCG4N/2ls++YlLpMpULU= administrator@EC2AMAZ-S7LCGUL"
+}
+
+
+resource "aws_key_pair" "QSC_POC_Key_Pair" {
+  key_name   = var.Key_Pair_Name
+  public_key = var.public_key
+}
+
+resource "aws_security_group" "QSC-POC" {
+  name = "QSC-POC-SecurityGroup"
+  description = "Allow HTTP and SSH traffic via Terraform"
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 3389
+    to_port     = 3389
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }  
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_instance" "QSC-POC" {
+  #ami           = "ami-05dbd1926bfb06723"
+  ami           = "ami-05dbd1926bfb06723"
+  instance_type = "t2.micro"
+  count=5
+  key_name      = aws_key_pair.QSC_POC_Key_Pair.key_name
+  #key_name="QSC-POC"
+  vpc_security_group_ids = [aws_security_group.QSC-POC.id]
+  tags = {
+    Name  = "QSC-POC-${count.index}"
+  }
+  #user_data = "${file("userdata.bat")}"
+  user_data = <<EOF
+    <powershell>
+    cls
+    cd "C:\"
+    mkdir C:\CloudAgent
+    curl "https://achourasia-qsc-poc.s3.ap-south-1.amazonaws.com/QualysCloudAgent-QSC-POC.exe" -o "C:\CloudAgent\QualysCloudAgent.exe"
+    cd "C:\CloudAgent"
+    .\QualysCloudAgent.exe CustomerId="{34a4ab0a-e2a2-f296-811b-265f10df3d95}" ActivationId="{ff562e6d-aaca-4915-98c4-b8e70d700fa4}" WebServiceUri="https://qagpublic.qg1.apps.qualys.in/CloudAgent/"
+    </powershell>
+    EOF
+}
